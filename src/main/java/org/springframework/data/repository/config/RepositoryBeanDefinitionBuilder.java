@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.LookupOverride;
+import org.springframework.beans.factory.support.MethodOverrides;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ResourceLoader;
@@ -65,7 +67,8 @@ class RepositoryBeanDefinitionBuilder {
 		this.extension = extension;
 		this.resourceLoader = resourceLoader;
 		this.metadataReaderFactory = new CachingMetadataReaderFactory(resourceLoader);
-		this.implementationDetector = new CustomRepositoryImplementationDetector(metadataReaderFactory, environment, resourceLoader);
+		this.implementationDetector = new CustomRepositoryImplementationDetector(metadataReaderFactory, environment,
+				resourceLoader);
 	}
 
 	/**
@@ -100,7 +103,7 @@ class RepositoryBeanDefinitionBuilder {
 
 		builder.addPropertyValue("namedQueries", definitionBuilder.build(configuration.getSource()));
 
-		String customImplementationBeanName = registerCustomImplementation(configuration);
+		String customImplementationBeanName = registerCustomImplementation(configuration, builder.getRawBeanDefinition());
 
 		if (customImplementationBeanName != null) {
 			builder.addPropertyReference("customImplementation", customImplementationBeanName);
@@ -116,7 +119,8 @@ class RepositoryBeanDefinitionBuilder {
 		return builder;
 	}
 
-	private String registerCustomImplementation(RepositoryConfiguration<?> configuration) {
+	private String registerCustomImplementation(RepositoryConfiguration<?> configuration,
+			AbstractBeanDefinition factoryBeanDefinition) {
 
 		String beanName = configuration.getImplementationBeanName();
 
@@ -137,12 +141,22 @@ class RepositoryBeanDefinitionBuilder {
 					+ beanDefinition.getBeanClassName());
 		}
 
+		// Fake method override for abstract classes to enforce CGLib being used for instantiation
+		if (beanDefinition.isAbstract()) {
+
+			MethodOverrides overrides = new MethodOverrides();
+			overrides.addOverride(new LookupOverride("finalize", "name"));
+			beanDefinition.setMethodOverrides(overrides);
+			beanDefinition.setAbstract(false);
+
+			factoryBeanDefinition.setPrimary(true);
+		}
+
 		beanDefinition.setSource(configuration.getSource());
 
 		registry.registerBeanDefinition(beanName, beanDefinition);
 
 		return beanName;
 	}
-
 
 }

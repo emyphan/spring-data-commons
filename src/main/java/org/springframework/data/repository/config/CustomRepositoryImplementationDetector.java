@@ -22,11 +22,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.core.type.classreading.MetadataReaderFactory;
 import org.springframework.core.type.filter.RegexPatternTypeFilter;
 import org.springframework.util.Assert;
@@ -80,10 +82,16 @@ public class CustomRepositoryImplementationDetector {
 		Assert.notNull(basePackages, "BasePackages must not be null!");
 
 		// Build pattern to lookup implementation class
-		Pattern pattern = Pattern.compile(".*\\." + className);
+		Pattern pattern = Pattern.compile(".*[\\.$]" + className);
 
 		// Build classpath scanner and lookup bean definition
-		ClassPathScanningCandidateComponentProvider provider = new ClassPathScanningCandidateComponentProvider(false);
+		ClassPathScanningCandidateComponentProvider provider = new ClassPathScanningCandidateComponentProvider(false) {
+			@Override
+			protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
+				return beanDefinition.getMetadata().isIndependent();
+			}
+		};
+
 		provider.setEnvironment(environment);
 		provider.setResourceLoader(resourceLoader);
 		provider.setResourcePattern(String.format(CUSTOM_IMPLEMENTATION_RESOURCE_PATTERN, className));
@@ -101,7 +109,19 @@ public class CustomRepositoryImplementationDetector {
 		}
 
 		if (definitions.size() == 1) {
-			return (AbstractBeanDefinition) definitions.iterator().next();
+
+			AbstractBeanDefinition definition = (AbstractBeanDefinition) definitions.iterator().next();
+
+			if (definition instanceof AnnotatedBeanDefinition) {
+				AnnotationMetadata metadata = ((AnnotatedBeanDefinition) definition).getMetadata();
+
+				// Mark bean definition abstract for abstract classes
+				if (metadata.isAbstract()) {
+					definition.setAbstract(true);
+				}
+			}
+
+			return definition;
 		}
 
 		List<String> implementationClassNames = new ArrayList<String>();

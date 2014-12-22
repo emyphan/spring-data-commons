@@ -71,10 +71,12 @@ public class AnnotationRepositoryConfigurationSourceUnitTests {
 	public void evaluatesExcludeFiltersCorrectly() {
 
 		Collection<BeanDefinition> candidates = source.getCandidates(new DefaultResourceLoader());
-		assertThat(candidates, hasSize(1));
+		assertThat(candidates, hasSize(2));
 
-		BeanDefinition candidate = candidates.iterator().next();
-		assertThat(candidate.getBeanClassName(), is(MyRepository.class.getName()));
+		for (BeanDefinition candidate : candidates) {
+			assertThat(candidate.getBeanClassName(),
+					is(anyOf(equalTo(MyRepository.class.getName()), equalTo(RepositoryWithImplementation.class.getName()))));
+		}
 	}
 
 	/**
